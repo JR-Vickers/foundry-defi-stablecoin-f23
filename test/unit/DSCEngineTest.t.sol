@@ -24,6 +24,14 @@ contract DSCEngineTest is Test {
     uint256 public constant AMOUNT_COLLATERAL = 10 ether;
     uint256 public constant STARTING_ERC20_BALANCE = 10 ether;
 
+    modifier depositedCollateral() {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
+        dsce.depositCollateral(weth, AMOUNT_COLLATERAL);
+        vm.stopPrank();
+        _;
+    }
+
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, dsce, helperConfig) = deployer.run();
@@ -85,19 +93,37 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
     }
 
-    modifier depositedCollateral() {
-        vm.startPrank(USER);
-        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
-        dsce.depositCollateral(weth, AMOUNT_COLLATERAL);
-        vm.stopPrank();
-        _;
-    }
-
     function testCanDepositCollateralAndGetAccountInfo() public depositedCollateral {
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = dsce.getAccountInformation(USER);
         uint256 expectedTotalDscMinted = 0;
         uint256 expectedDepositAmount = dsce.getTokenAmountFromUsd(weth, collateralValueInUsd);
         assertEq(totalDscMinted, expectedTotalDscMinted);
         assertEq(AMOUNT_COLLATERAL, expectedDepositAmount);
+    }
+
+    ////////////////////////////
+    // External Functions     //
+    ////////////////////////////
+
+    function testCanDepositCollateralAndMintDsc() public depositedCollateral {
+        uint256 amountDscToMint = 5; // Define the amount of DSC to mint
+
+        // Start the prank
+        vm.startPrank(USER);
+
+        // Approve the DSCEngine to spend the user's collateral
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
+
+        // Call the function to deposit collateral and mint DSC
+        dsce.depositCollateralAndMintDsc(weth, AMOUNT_COLLATERAL, amountDscToMint);
+
+        // Stop the prank
+        vm.stopPrank();
+
+        // Assert that the user's DSC balance has increased by the expected amount
+        assertEq(dsc.balanceOf(USER), amountDscToMint);
+
+        // Assert that the user's collateral balance has decreased by the expected amount
+        assertEq(ERC20Mock(weth).balanceOf(USER), STARTING_ERC20_BALANCE - AMOUNT_COLLATERAL);
     }
 }
